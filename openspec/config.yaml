@@ -1,0 +1,107 @@
+schema: spec-driven
+
+context: |
+  Product: AsadoSplit — static SPA to split asado expenses among friends.
+  It answers: total spent, per-person share, and who transfers to whom.
+  Users are non-technical and mobile-first; the full flow
+  (participants → contributions → settlement) must take < 1 minute.
+
+  Hard constraints:
+  - Zero cost: GitHub Pages (public repo, GitHub Free). No backend, DB,
+    serverless, auth provider, paid/third-party APIs, or billing-required infra.
+    Any proposal that adds cost must be rejected with a free alternative.
+  - All business logic runs in the browser. App must work under a repo subpath (Vite `base`).
+  - Persistence: localStorage only. Corrupted data must never crash the app.
+
+  Stack: React, TypeScript (strict), Vite, MUI (default Emotion engine), Formik + Yup for
+  all forms, Vitest, React Testing Library, ESLint, Prettier. No Tailwind.
+  No Redux/Zustand/React Query or similar without a demonstrated need; use hooks + local state.
+
+  UI / UX:
+  - Mobile-first always: design for xs first, scale up via MUI breakpoints in `sx`/theme.
+    Never desktop-first layouts adapted down.
+  - Super simple: single page, single column on mobile, no dashboards, no extra screens,
+    no unnecessary modals/dialogs, minimal taps. When in doubt, remove instead of add.
+  - Touch-friendly targets, numeric keyboard for amounts (inputMode="numeric"),
+    accessible labels, good contrast, immediate recalculation, clear empty states.
+  - One custom MUI theme (palette, typography, breakpoints) in src/theme; no ad-hoc styling systems.
+  - Forms: Formik for state/submit, Yup for validation, inline es-AR error messages.
+
+  Architecture:
+  - src/domain/{models,services}: pure, React-agnostic functions, fully unit-tested.
+  - src/features/{participants,expenses,settlements}, src/components, src/hooks, src/lib.
+  - The settlement algorithm has zero dependency on React.
+  - Yup schemas live in features (e.g. features/participants/schemas). src/domain does not
+    depend on Yup, Formik or MUI and enforces its own invariants.
+
+  Money:
+  - Integer minor units (centavos) internally. Never floating point for money.
+  - Whole pesos only: every contribution, share, balance and transfer is a multiple of 100
+    centavos. Input rejects non-zero centavos ("Poné el monto sin centavos."); a ",00" / ".00"
+    suffix is accepted as whole pesos; inputMode="numeric".
+  - Equal share = ceil(total / participants) in whole pesos, identical for everyone.
+    The surplus (shares sum - total, at most participants - 1 pesos) goes to the participant
+    with the highest contribution; ties by insertion order. Rounding never creates or
+    destroys money: balances sum to exactly 0.
+  - Display via Intl.NumberFormat('es-AR', ARS) without decimals, e.g. $ 29.112.
+
+  MVP features:
+  - Participants CRUD with contributions; immediate recalculation.
+  - Persistence in localStorage (survives refresh, reset / new asado).
+  - Settlement algorithm that compensates debts to reduce transfers (greedy).
+  - "Compartir transferencias" / "Compartir aportes": one PNG image each (transfers,
+    contributions) drawn client-side on <canvas> and shared as files via Web Share API,
+    paced downloads as fallback. Each button sits below the list it shares.
+  - "Compartir como texto": plain-text WhatsApp-compatible summary, clipboard copy as fallback.
+  - Responsive UI, designed primarily for phones.
+
+  Domain model (src/domain/models). All amounts are integer centavos:
+    interface Participant { id: string; name: string; contribution: number }
+    interface Balance { participantId: string; amount: number } // >0 receives, <0 pays
+    interface Transfer { from: string; to: string; amount: number } // from/to = Participant.id, amount > 0
+  - Only participants are persisted (with a schema version). Balances and transfers
+    are always derived, never stored.
+  - Amounts must satisfy Number.isSafeInteger; contributions >= 0.
+
+  MVP rules: equal split among all participants; total = sum of contributions;
+  contributions >= 0; names non-empty and unique (trimmed, case-insensitive).
+
+  Language: user-facing copy in Argentine Spanish (es-AR, voseo).
+  Code, identifiers and OpenSpec artifacts in English.
+
+  Out of scope (MVP): auth, backend, DB, payments/Mercado Pago, bank integration,
+  user profiles, multi-device sync, push, analytics, AI, expense categories,
+  unequal splits, multi-currency.
+
+rules:
+  proposal:
+    - Always state what is out of scope
+    - Reject any option that introduces infrastructure cost
+  specs:
+    - Every requirement has at least one scenario using GIVEN/WHEN/THEN
+    - Monetary scenarios use exact centavo values, never approximations
+    - Cover edge cases - no participants, one participant, zero total, equal contributions, non-divisible total
+    - Validation scenarios state the exact es-AR error message shown to the user
+    - UX scenarios assume a mobile viewport (xs) unless stated otherwise
+  design:
+    - Describe the screen layout for xs first, then what changes (if anything) on larger breakpoints
+    - List the MUI components used per section and justify any component beyond the basics
+    - Define Yup schemas per form and how they map to domain invariants
+    - Document the settlement algorithm (greedy), its tie-break ordering for determinism, and complexity; never claim it minimizes transfer count
+    - Document the rounding strategy (ceil to whole pesos, surplus to the top contributor) and invariants (sum of balances = 0, sum of transfers settles all balances)
+    - Document the localStorage schema with a version field and the recovery strategy for invalid data
+    - Document the GitHub Pages deploy approach and Vite base path resolution
+  tasks:
+    - Domain logic and its tests come before UI tasks
+    - Keep tasks small and verifiable; reference the spec requirement each one implements
+    - Include a test fixture task for the reference asado (Franco 180000, Pica 42000, El Aleman 40000, six participants at 0)
+
+operations:
+  apply:
+    guidance:
+      - TDD for src/domain - write failing Vitest tests first
+      - Run lint and tests before marking a task done
+      - Never create a remote repo, push, or publish without explicit authorization
+  archive:
+    guidance:
+      - Verify specs reflect the implemented behavior before archiving
